@@ -76,9 +76,21 @@ class GoogleSheetsManager:
 			n_cols = col2 - col1 + 1
 
 			if value is None:
+				# [1] - If value is None, just read the range
 				return self.sheet.get(raw_coord)
+
 			if not isinstance(value, list):
+				# [2] - If value is not a list, set the same value for all cells
 				value = [[value] * n_cols for _ in range(n_rows)]
+
+			elif isinstance(value, list) and len(value) == n_cols and all(not isinstance(v, list) for v in value):
+				# [3] - If value lenght is equal to the number of cols, all rows will have the same values
+				value = [value for _ in range(n_rows)]
+
+			elif isinstance(value, list):
+				# [4] - If value lenght is not the same of the cols number, won't do anything
+				raise ValueError(f"Length of provided values ({len(value)}) does not match number of columns ({n_cols})")
+				return
 
 			for r_idx, row in enumerate(value):
 				for c_idx, val in enumerate(row):
