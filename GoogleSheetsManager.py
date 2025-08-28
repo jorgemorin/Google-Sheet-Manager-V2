@@ -2,6 +2,7 @@ import gspread
 from gspread.utils import a1_to_rowcol, a1_range_to_grid_range
 from gspread_formatting import CellFormat, Color, format_cell_range, get_effective_format
 from google.oauth2.service_account import Credentials
+import re
 
 PASTEL_COLORS = {
 	"red":     (0.95, 0.6, 0.6),
@@ -58,7 +59,7 @@ class GoogleSheetsManager:
 		else:
 			raise ValueError(f"Color {color_name} not found, try these: {', '.join(colors.keys())}")
 
-	def cell(self, raw_coord, value = None):
+	def cell(self, raw_coord, value = None, fill_down = False):
 		coord = self.parse(raw_coord)
 
 		# Only one cell
@@ -85,7 +86,27 @@ class GoogleSheetsManager:
 
 			elif isinstance(value, list) and len(value) == n_cols and all(not isinstance(v, list) for v in value):
 				# [3] - If value lenght is equal to the number of cols, all rows will have the same values
-				value = [value for _ in range(n_rows)]
+				if fill_down:
+					# [3.1] - If fill_down is True, will shift formulas down
+					cell_ref_pattern = re.compile(r'([A-Za-z]+)([0-9]+)')
+
+					def shift_formula(formula, row_offset):
+						if isinstance(formula, str) and formula.startswith("="):
+							def repl(match):
+								col_letters = match.group(1)
+								row_number = int(match.group(2)) + row_offset
+								return f"{col_letters}{row_number}"
+							return cell_ref_pattern.sub(repl, formula)
+						return formula
+
+					new_values = []
+					for r_idx in range(n_rows):
+						shifted_row = [shift_formula(val, r_idx) for val in value]
+						new_values.append(shifted_row)
+					value = new_values
+				else:
+					# [3.2] - If fill_down is False, will repeat the same values for all rows
+					value = [value for _ in range(n_rows)]
 
 			elif isinstance(value, list):
 				# [4] - If value lenght is not the same of the cols number, won't do anything
@@ -97,8 +118,8 @@ class GoogleSheetsManager:
 					self.sheet.update_cell(row1 + r_idx, col1 + c_idx, val)
 
 			return
-	def cells(self, raw_coord, value = None):
-		self.cell(raw_coord, value)
+	def cells(self, raw_coord, value = None, fill_down = False):
+		self.cell(raw_coord, value, fill_down)
 
 	def background(self, raw_coord, color):
 		r, g, b = self.parse_color(color)
